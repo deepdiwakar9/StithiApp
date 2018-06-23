@@ -2,6 +2,7 @@ package com.example.app.stithiapp;
 
 import android.app.ProgressDialog;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.support.annotation.NonNull;
@@ -29,7 +30,14 @@ import com.squareup.picasso.Picasso;
 import com.theartofdev.edmodo.cropper.CropImage;
 import com.theartofdev.edmodo.cropper.CropImageView;
 
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+
 import de.hdodenhof.circleimageview.CircleImageView;
+import id.zelory.compressor.Compressor;
 
 public class AccountSettings extends AppCompatActivity {
 
@@ -73,7 +81,7 @@ public class AccountSettings extends AppCompatActivity {
                 mName.setText(name);
                 mStatus.setText(status);
                 if(!image.equals(defaultString)){
-                    Picasso.get().load(image).into(mImage);
+                    Picasso.get().load(image).placeholder(R.drawable.new_profile).into(mImage);
                 }
 
             }
@@ -129,26 +137,67 @@ public class AccountSettings extends AppCompatActivity {
                 mProgressDialog.show();
 
                 Uri resultUri = result.getUri();
-                StorageReference filepath = mProfileStorage.child(currentUser + ".jpg");
-                filepath.putFile(resultUri).addOnCompleteListener(new OnCompleteListener<UploadTask.TaskSnapshot>() {
-                    @Override
-                    public void onComplete(@NonNull Task<UploadTask.TaskSnapshot> task) {
-                        if(task.isSuccessful()){
-                            String downloadUrl = task.getResult().getDownloadUrl().toString();
-                            userDatabse.child("image").setValue(downloadUrl).addOnCompleteListener(new OnCompleteListener<Void>() {
-                                @Override
-                                public void onComplete(@NonNull Task<Void> task) {
-                                    mProgressDialog.dismiss();
-                                    Toast.makeText(getApplicationContext(), "Successfully Uploaded", Toast.LENGTH_SHORT).show();
-                                }
-                            });
+                File thumb_file = new File(resultUri.getPath());
+                Bitmap thumb_bitmap;
+                try {
+                    thumb_bitmap = new Compressor(this)
+                            .setMaxWidth(200)
+                            .setMaxHeight(200)
+                            .setQuality(75)
+                            .compressToBitmap(thumb_file);
 
-                        }else{
-                            mProgressDialog.hide();
-                            Toast.makeText(getApplicationContext(), "Error while uploading", Toast.LENGTH_SHORT).show();
+                    StorageReference filepath = mProfileStorage.child(currentUser + ".jpg");
+                    final StorageReference thumb_filepath = mProfileStorage.child("thumb_images").child(currentUser + ".jpg");
+
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    thumb_bitmap.compress(Bitmap.CompressFormat.JPEG, 100, baos);
+                    final byte[] thumb_byte = baos.toByteArray();
+
+                    filepath.putFile(resultUri).addOnCompleteListener(new OnCompleteListener<UploadTask.TaskSnapshot>() {
+                        @Override
+                        public void onComplete(@NonNull Task<UploadTask.TaskSnapshot> task) {
+                            if(task.isSuccessful()){
+                                final String downloadUrl = task.getResult().getDownloadUrl().toString();
+
+                                UploadTask uploadTask = thumb_filepath.putBytes(thumb_byte);
+                                uploadTask.addOnCompleteListener(new OnCompleteListener<UploadTask.TaskSnapshot>() {
+                                    @Override
+                                    public void onComplete(@NonNull Task<UploadTask.TaskSnapshot> thumb_task) {
+                                        if(thumb_task.isSuccessful()){
+
+                                            String thumb_downloadUrl = thumb_task.getResult().getDownloadUrl().toString();
+
+                                            Map update_images = new HashMap<>();
+                                            update_images.put("image", downloadUrl);
+                                            update_images.put("thumb_image", thumb_downloadUrl);
+
+                                            userDatabse.updateChildren(update_images).addOnCompleteListener(new OnCompleteListener<Void>() {
+                                                @Override
+                                                public void onComplete(@NonNull Task<Void> task) {
+                                                    mProgressDialog.dismiss();
+                                                    Toast.makeText(getApplicationContext(), "Successfully Uploaded", Toast.LENGTH_SHORT).show();
+                                                }
+                                            });
+
+                                        }
+                                        else{
+                                            Toast.makeText(getApplicationContext(), "Error in uploading thumbnail", Toast.LENGTH_SHORT).show();
+                                        }
+                                    }
+                                });
+
+
+                            }else{
+                                mProgressDialog.hide();
+                                Toast.makeText(getApplicationContext(), "Error while uploading", Toast.LENGTH_SHORT).show();
+                            }
                         }
-                    }
-                });
+                    });
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    mProgressDialog.hide();
+                    Toast.makeText(getApplicationContext(), "Error while progressing", Toast.LENGTH_SHORT).show();
+                }
 
             } else if (resultCode == CropImage.CROP_IMAGE_ACTIVITY_RESULT_ERROR_CODE) {
                 Exception error = result.getError();

@@ -100,7 +100,8 @@ public class RegisterActivity extends AppCompatActivity {
                     HashMap<String, String> userDetails = new HashMap<>();
                     userDetails.put("name", stringName);
                     userDetails.put("status", "Hey, There!!!");
-                    userDetails.put("image", "default, There!!!");
+                    userDetails.put("image", "default");
+                    userDetails.put("thumb_image", "default");
 
                     mDatabase.setValue(userDetails).addOnCompleteListener(new OnCompleteListener<Void>() {
                         @Override
