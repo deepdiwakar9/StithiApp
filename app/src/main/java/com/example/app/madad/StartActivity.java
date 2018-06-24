@@ -1,4 +1,4 @@
-package com.example.app.stithiapp;
+package com.example.app.madad;
 
 import android.content.Intent;
 import android.support.v7.app.AppCompatActivity;
